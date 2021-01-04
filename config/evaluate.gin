@@ -67,4 +67,4 @@ evaluate_model.criterion = @DiceLoss
 evaluate_model.num_classes = %NUM_CLASSES
 evaluate_model.visualize = True
 evaluate_model.data_loaders = %DATA_LOADERS
-evaluate_model.image_output_path = '/scratch/dpadma2s/neuroscience_lab_data'
+evaluate_model.image_output_path = '/scratch/dpadma2s/neuroscience_lab_data/output_images/'

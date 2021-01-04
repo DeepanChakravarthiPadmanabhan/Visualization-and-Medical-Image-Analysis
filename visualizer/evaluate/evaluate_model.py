@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import torch
 import matplotlib.pyplot as plt
+from matplotlib import colors
 from copy import deepcopy
 
 from torch.utils.data import Dataset
@@ -18,7 +19,12 @@ from visualizer.loss_function.dice_loss import DiceLoss
 from visualizer.loss_function.dice_loss import get_dice_coefficient
 
 LOGGER = logging.getLogger(__name__)
-
+COLOR_MAPPING = {
+    'background': (255, 255, 255) ,  # white
+    'C1': (255, 0, 0)    ,    # red
+    'C2': (0, 255, 0) ,  # green
+    'C3': (0, 0, 255)   ,     # blue
+    }
 
 @gin.configurable
 def evaluate_model(
@@ -60,12 +66,12 @@ def evaluate_model(
         os.makedirs(os.path.dirname(report_output_path))
 
     if visualize and (
-        not os.path.exists(os.path.join(image_output_path, "output_images"))
+        not os.path.exists(os.path.join(image_output_path))
     ):
-        os.makedirs(os.path.join(image_output_path, "output_images"))
+        os.makedirs(os.path.join(image_output_path))
         LOGGER.info(
             "Saving images in the directory: %s",
-            os.path.join(image_output_path, "output_images"),
+            os.path.join(image_output_path),
         )
 
     device = torch.device("cpu")
@@ -151,15 +157,26 @@ def evaluate_model(
 
             if visualize:
                 fig, (ax1, ax2) = plt.subplots(1, 2)
-                ax1.imshow(torch.squeeze(torch.argmax(outputs_segmentation, dim=1)).detach().numpy())
+                prediction_numpy_array = torch.squeeze(torch.argmax(outputs_segmentation, dim=1)).detach().numpy()
+                label_numpy_array = torch.squeeze(label).detach().numpy()
+                segmented_image = np.ones((prediction_numpy_array.shape)+ (3,))
+                segmented_image[prediction_numpy_array == 0] = COLOR_MAPPING['background']
+                segmented_image[prediction_numpy_array == 1] = COLOR_MAPPING['C1']
+                segmented_image[prediction_numpy_array == 2] = COLOR_MAPPING['C2']
+                segmented_image[prediction_numpy_array == 3] = COLOR_MAPPING['C3']
+                ax1.imshow(segmented_image.astype(int))
                 ax1.set_title("Prediction")
-                ax2.imshow(torch.squeeze(label).detach().numpy())
+                segmented_image = np.ones((label_numpy_array.shape) + (3,))
+                segmented_image[label_numpy_array == 0] = COLOR_MAPPING['background']
+                segmented_image[label_numpy_array == 1] = COLOR_MAPPING['C1']
+                segmented_image[label_numpy_array == 2] = COLOR_MAPPING['C2']
+                segmented_image[label_numpy_array == 3] = COLOR_MAPPING['C3']
+                ax2.imshow(segmented_image.astype(int))
                 ax2.set_title("Target label")
                 fig.suptitle("Visualizer result")
                 LOGGER.info("Saving image number: %s", data["id"][0] + '_' + str(count))
                 fig.savefig(
                     image_output_path
-                    + "/output_images/"
                     + data["id"][0] + '_' + str(count)
                     + ".jpg"
                 )
