@@ -14,12 +14,13 @@ def get_dice_coefficient(input, target, weight=None, smooth=1.0, device='cpu'):
     return dice_coeff * weight
 
 
-def get_dice_coefficient_imp2(input, target):
+def get_dice_coefficient_imp2(input, target, weight=None, smooth=1.0, device='cpu'):
     dims = tuple(range(2, target.ndimension()))
     intersection = torch.sum(input * target, dims)
     cardinality = torch.sum(input ** 2 + target ** 2, dims)
-    dice_coeff = ((2. * intersection + 1) / (cardinality + 1))
-    return dice_coeff
+    dice_coeff = ((2. * intersection + smooth) / (cardinality + smooth))
+    weight = weight.to(device)
+    return dice_coeff * weight
 
 @gin.configurable
 class DiceLoss(nn.Module):

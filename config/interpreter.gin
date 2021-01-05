@@ -1,0 +1,55 @@
+import visualizer.transforms.transforms
+import visualizer.evaluate.evaluate_model
+import visualizer.architectures.unet_pruned
+import visualizer.datasets.train_dataset
+import visualizer.datasets.test_dataset
+import visualizer.datasets.valid_dataset
+import visualizer.utils.preprocessing
+import visualizer.data_loader.data_loader
+import visualizer.loss_function.dice_loss
+import visualizer.interpreter.guided_backpropagation
+
+INPUT_HEIGHT = 240
+INPUT_WIDTH = 240
+NUM_CLASSES = 4
+
+# Data transformation configuration
+TRANSFORM_CONFIGURATION = {
+'0': {'transform_type': 'NormalizeImage', 'params': {'mean' :128.0, 'stddev': 128.0}}
+}
+configure_transforms.config = %TRANSFORM_CONFIGURATION
+
+TrainDataset.transform = @configure_transforms()
+TrainDataset.input_height = %INPUT_HEIGHT
+TrainDataset.input_width = %INPUT_WIDTH
+TrainDataset.root_dir = '/scratch/dpadma2s/neuroscience_lab_data/final_split_patient_preprocessed/train/'
+TRAIN_DATASET = @TrainDataset()
+
+TestDataset.transform = @configure_transforms()
+TestDataset.input_height = %INPUT_HEIGHT
+TestDataset.input_width = %INPUT_WIDTH
+TestDataset.root_dir = '/scratch/dpadma2s/neuroscience_lab_data/final_split_patient_preprocessed/test/'
+TEST_DATASET = @TestDataset()
+
+ValidDataset.transform = @configure_transforms()
+ValidDataset.input_height = %INPUT_HEIGHT
+ValidDataset.input_width = %INPUT_WIDTH
+ValidDataset.root_dir = '/scratch/dpadma2s/neuroscience_lab_data/final_split_patient_preprocessed/valid/'
+VALID_DATASET = @ValidDataset()
+
+# Data loader configuration
+get_train_valid_test_loader.batch_size = 1
+get_train_valid_test_loader.random_seed = 39248
+get_train_valid_test_loader.num_workers = 0
+get_train_valid_test_loader.train_dataset = %TRAIN_DATASET
+get_train_valid_test_loader.valid_dataset = %VALID_DATASET
+get_train_valid_test_loader.test_dataset = %TEST_DATASET
+DATA_LOADERS = @get_train_valid_test_loader()
+
+
+
+# Guided Backpropagation
+guided_backpropagate.dataloader = %DATA_LOADERS
+guided_backpropagate.net = @Unet_pruned()
+guided_backpropagate.image_output_path = 'report/out_interpreter/'
+guided_backpropagate.visualize = True

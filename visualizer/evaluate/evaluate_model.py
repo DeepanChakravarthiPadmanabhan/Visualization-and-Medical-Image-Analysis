@@ -128,10 +128,25 @@ def evaluate_model(
             # label_class1 = label_class1.unsqueeze(1)
             # label_class2 = label_class2.unsqueeze(1)
             # label_class3 = label_class3.unsqueeze(1)
-            # dice_value_0 = get_dice_coefficient(outputs_segmentation, label_class0).mean().detach().item()
-            # dice_value_1 = get_dice_coefficient(outputs_segmentation, label_class1).mean().detach().item()
-            # dice_value_2 = get_dice_coefficient(outputs_segmentation, label_class2).mean().detach().item()
-            # dice_value_3 = get_dice_coefficient(outputs_segmentation, label_class3).mean().detach().item()
+            # outputs_mask = torch.argmax(outputs_segmentation, dim=1).detach()
+            # outputs_class0 = deepcopy(outputs_mask)
+            # outputs_class1 = deepcopy(outputs_mask)
+            # outputs_class2 = deepcopy(outputs_mask)
+            # outputs_class3 = deepcopy(outputs_mask)
+            # outputs_class0[outputs_class0 != 0] = 1
+            # outputs_class1[outputs_class1 != 1] = 0
+            # outputs_class2[outputs_class2 != 2] = 0
+            # outputs_class2[outputs_class2 == 2] = 1
+            # outputs_class3[outputs_class3 != 3] = 0
+            # outputs_class3[outputs_class3 == 3] = 1
+            # outputs_class0 = torch.nn.functional.one_hot(outputs_class0.long(), num_classes=2).permute(0, 3, 1, 2).to(dtype=torch.float32)
+            # outputs_class1 = torch.nn.functional.one_hot(outputs_class1.long(), num_classes=2).permute(0, 3, 1, 2).to(dtype=torch.float32)
+            # outputs_class2 = torch.nn.functional.one_hot(outputs_class2.long(), num_classes=2).permute(0, 3, 1, 2).to(dtype=torch.float32)
+            # outputs_class3 = torch.nn.functional.one_hot(outputs_class3.long(), num_classes=2).permute(0, 3, 1, 2).to(dtype=torch.float32)
+            # dice_value_0 = get_dice_coefficient(outputs_class0, label_class0, weight=class_weights, device=device).mean().detach().item()
+            # dice_value_1 = get_dice_coefficient(outputs_class1, label_class1, weight=class_weights, device=device).mean().detach().item()
+            # dice_value_2 = get_dice_coefficient(outputs_class2, label_class2, weight=class_weights, device=device).mean().detach().item()
+            # dice_value_3 = get_dice_coefficient(outputs_class3, label_class3, weight=class_weights, device=device).mean().detach().item()
 
             # Method 2
             label_coded = torch.nn.functional.one_hot(label.long(), num_classes=4)
