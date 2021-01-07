@@ -6,19 +6,11 @@ from torch.nn import ReLU
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
+from visualizer.utils.constants import MODALITY
+from visualizer.utils.post_processing import sketch_gt_overlay, post_process_gradient, get_positive_negative_saliency
 
 LOGGER = logging.getLogger(__name__)
-COLOR_MAPPING = {
-    'background': (0, 0, 0) ,  # black -> Background
-    'C1': (255, 0, 0)    ,    # red -> Non-enhancing tumor core (NCR/NET)
-    'C2': (0, 255, 0) ,  # green -> Peritumoral edema (ED)
-    'C3': (0, 0, 255)   ,     # blue -> Gadolinium-enhancing tumor (ET)
-    }
 
-MODALITY = {1: 'FLAIR',
-            2: 'T1',
-            3: 'T1-CE',
-            4: 'T2'}
 
 class GuidedBackprop():
 
@@ -123,6 +115,7 @@ def guided_backpropagate(model_path,
                          visualize,
                          idx=150,
                          grad_visualizer_modality=1,
+                         show=False,
                          ):
 
     if not os.path.exists(os.path.dirname(report_output_path)):
@@ -162,40 +155,34 @@ def guided_backpropagate(model_path,
 
             if visualize:
 
-                fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
+                fig, (ax1, ax2) = plt.subplots(1, 2)
 
+                img_masked = sketch_gt_overlay(image[0][grad_visualizer_modality].detach().numpy(), label, MODALITY[grad_visualizer_modality])
                 ax1.set_aspect(1)
-                ax1.imshow(image[0][1].detach().numpy())
+                ax1.imshow(img_masked)
                 ax1.axis('off')
-                ax1.set_title('Image ('+ MODALITY[grad_visualizer_modality] + ')')
+                ax1.set_title('Image ('+ MODALITY[grad_visualizer_modality] + ') + Mask')
+                black_patch = mpatches.Patch(color='black', label='BG')
+                red_patch = mpatches.Patch(color='red', label='NET')
+                green_patch = mpatches.Patch(color='green', label='ED')
+                blue_patch = mpatches.Patch(color='blue', label='ET')
+                ax1.legend(handles=[black_patch, red_patch, green_patch, blue_patch], bbox_to_anchor=(1.05, 1), loc='upper left',
+                           borderaxespad=0.)
 
                 ax2.set_aspect(1)
                 ax2.imshow(processed_grad)
                 ax2.axis('off')
                 ax2.set_title('Gradient')
 
-                segmented_image = np.ones((label.shape) + (3,))
-                segmented_image[label == 0] = COLOR_MAPPING['background']
-                segmented_image[label == 1] = COLOR_MAPPING['C1']
-                segmented_image[label == 2] = COLOR_MAPPING['C2']
-                segmented_image[label == 3] = COLOR_MAPPING['C3']
-
-                # red_patch = mpatches.Patch(color='red', label='The red data')
-                # blue_patch = mpatches.Patch(color='blue', label='The blue data')
-                ax3.set_aspect(1)
-                ax3.imshow(segmented_image.astype(int))
-                ax3.axis('off')
-                ax3.set_title('Ground truth mask')
-                # ax3.legend(handles=[red_patch, blue_patch], bbox_to_anchor=(0.6, 0.5), borderaxespad=0.)
-
-                plt.suptitle('Gradients of input image', x=0.5, y=0.8)
+                plt.suptitle('Gradients of input image', x=0.5, y=0.84)
                 fig.tight_layout()
                 plt.savefig(
                     image_output_path
-                    + data["id"][0] + '_grad_label' + str(count)
+                    + data["id"][0] + '_mask_grad_' + str(count)
                     + ".pdf", dpi=300
                 )
-                plt.show()
+                if show:
+                    plt.show()
                 plt.close(fig)
 
                 fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
@@ -221,36 +208,16 @@ def guided_backpropagate(model_path,
                 fig.tight_layout()
                 plt.savefig(
                     image_output_path
-                    + data["id"][0] + '_grad_' + str(count)
+                    + data["id"][0] + '_all_grad_' + str(count)
                     + ".pdf", dpi=300
                 )
-                plt.show()
+                if show:
+                    plt.show()
                 plt.close()
 
-def post_process_gradient(gradient):
-    """
-    Exports the original gradient image
-    :param gradient:
-        Numpy array of the gradient with shape (3, 224, 224)
-    :param filename:
-    :return:
-    """
-    gradient = gradient - gradient.min()
-    gradient /= gradient.max()
-    return gradient
-
-def get_positive_negative_saliency(gradient):
-    """
-    Generates positive and negative saliency maps based on the gradient
-    :param gradient: numpy array
-        Gradient of the operation to visualize
-    :return:
-    """
-    pos_saliency = np.maximum(0, gradient) / gradient.max()
-    neg_saliency = np.maximum(0, -gradient) / -gradient.min()
-    return pos_saliency, neg_saliency
-
-
-
-
-
+                sketch_gt_overlay(image[0][grad_visualizer_modality].detach().numpy(),
+                               label,
+                               image_output_path + data["id"][0] + '_input_mask_'+ str(count) + '.pdf',
+                               MODALITY[grad_visualizer_modality],
+                               True,
+                               show)
