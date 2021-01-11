@@ -116,6 +116,7 @@ def guided_backpropagate(model_path,
                          idx=150,
                          grad_visualizer_modality=1,
                          show=False,
+                         visualize_saliency=False,
                          ):
 
     if not os.path.exists(os.path.dirname(report_output_path)):
@@ -175,7 +176,7 @@ def guided_backpropagate(model_path,
                 ax2.set_title('Gradient')
 
                 plt.suptitle('Gradients of input image', x=0.5, y=0.84)
-                fig.tight_layout()
+                plt.tight_layout()
                 plt.savefig(
                     image_output_path
                     + data["id"][0] + '_mask_grad_' + str(count)
@@ -185,35 +186,36 @@ def guided_backpropagate(model_path,
                     plt.show()
                 plt.close(fig)
 
-                fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
+                if visualize_saliency:
+                    fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
 
-                pos_saliency, neg_saliency = get_positive_negative_saliency(grad_for_visualization)
+                    pos_saliency, neg_saliency = get_positive_negative_saliency(grad_for_visualization)
 
-                ax1.set_aspect(1)
-                ax1.imshow(processed_grad)
-                ax1.axis('off')
-                ax1.set_title('Gradients - out/inp')
+                    ax1.set_aspect(1)
+                    ax1.imshow(processed_grad)
+                    ax1.axis('off')
+                    ax1.set_title('Gradients - out/inp')
 
-                ax2.set_aspect(1)
-                ax2.imshow(pos_saliency) # Positive probability impact
-                ax2.axis('off')
-                ax2.set_title('Positive')
+                    ax2.set_aspect(1)
+                    ax2.imshow(pos_saliency) # Positive probability impact
+                    ax2.axis('off')
+                    ax2.set_title('Positive')
 
-                ax3.set_aspect(1)
-                ax3.imshow(neg_saliency) # Negative probability impact
-                ax3.axis('off')
-                ax3.set_title('Negative')
+                    ax3.set_aspect(1)
+                    ax3.imshow(neg_saliency) # Negative probability impact
+                    ax3.axis('off')
+                    ax3.set_title('Negative')
 
-                plt.suptitle('Positive and negative saliency maps', x=0.5, y=0.8)
-                fig.tight_layout()
-                plt.savefig(
-                    image_output_path
-                    + data["id"][0] + '_all_grad_' + str(count)
-                    + ".pdf", dpi=300
-                )
-                if show:
-                    plt.show()
-                plt.close()
+                    plt.suptitle('Positive and negative saliency maps', x=0.5, y=0.8)
+                    plt.tight_layout()
+                    plt.savefig(
+                        image_output_path
+                        + data["id"][0] + '_all_grad_' + str(count)
+                        + ".pdf", dpi=300
+                    )
+                    if show:
+                        plt.show()
+                    plt.close()
 
                 sketch_gt_overlay(image[0][grad_visualizer_modality].detach().numpy(),
                                label,

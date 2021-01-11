@@ -10,21 +10,15 @@ import torch
 import matplotlib.pyplot as plt
 from matplotlib import colors
 from copy import deepcopy
+import matplotlib.patches as mpatches
 
 from torch.utils.data import Dataset
 
-from sklearn.metrics import precision_recall_fscore_support
-from sklearn.metrics import confusion_matrix
-from visualizer.loss_function.dice_loss import DiceLoss
 from visualizer.loss_function.dice_loss import get_dice_coefficient
 
+from visualizer.utils.constants import MODALITY, COLOR_MAPPING
+
 LOGGER = logging.getLogger(__name__)
-COLOR_MAPPING = {
-    'background': (255, 255, 255) ,  # white
-    'C1': (255, 0, 0)    ,    # red
-    'C2': (0, 255, 0) ,  # green
-    'C3': (0, 0, 255)   ,     # blue
-    }
 
 @gin.configurable
 def evaluate_model(
@@ -110,8 +104,11 @@ def evaluate_model(
 
         for image, label in zip(data["image"], data["label"]):
             count += 1
+            LOGGER.info("Predicting on image number: %s", data["id"][0] + '_' + str(count))
             images = image
             outputs_segmentation = net(images)
+            outputs_segmentation = (outputs_segmentation > 0.5).float()
+            outputs_argmax = torch.squeeze(torch.argmax(outputs_segmentation, dim=1)).detach()
 
             # Method 1
             # label_class0 = deepcopy(label)
@@ -163,7 +160,8 @@ def evaluate_model(
             dice_per_case_2.append(dice_value_2)
             dice_per_case_3.append(dice_value_3)
 
-            LOGGER.info("Predicting on image %s of patient id %s with label statistics %s", count, data["id"], label.unique(return_counts=True))
+            LOGGER.info("Statistics of groundtruth image %s of patient id %s: %s", count, data["id"], label.unique(return_counts=True))
+            LOGGER.info("Statistics of prediction on image %s of patient id %s: %s", count, data["id"], outputs_argmax.unique(return_counts=True))
             LOGGER.info("Dice co-efficient: (%s, %s, %s, %s)",  dice_value_0,
                                                                 dice_value_1,
                                                                 dice_value_2,
@@ -172,7 +170,7 @@ def evaluate_model(
 
             if visualize:
                 fig, (ax1, ax2) = plt.subplots(1, 2)
-                prediction_numpy_array = torch.squeeze(torch.argmax(outputs_segmentation, dim=1)).detach().numpy()
+                prediction_numpy_array = outputs_argmax.numpy()
                 label_numpy_array = torch.squeeze(label).detach().numpy()
                 segmented_image = np.ones((prediction_numpy_array.shape)+ (3,))
                 segmented_image[prediction_numpy_array == 0] = COLOR_MAPPING['background']
@@ -180,6 +178,8 @@ def evaluate_model(
                 segmented_image[prediction_numpy_array == 2] = COLOR_MAPPING['C2']
                 segmented_image[prediction_numpy_array == 3] = COLOR_MAPPING['C3']
                 ax1.imshow(segmented_image.astype(int))
+                ax1.set_aspect(1)
+                ax1.axis('off')
                 ax1.set_title("Prediction")
                 segmented_image = np.ones((label_numpy_array.shape) + (3,))
                 segmented_image[label_numpy_array == 0] = COLOR_MAPPING['background']
@@ -187,10 +187,20 @@ def evaluate_model(
                 segmented_image[label_numpy_array == 2] = COLOR_MAPPING['C2']
                 segmented_image[label_numpy_array == 3] = COLOR_MAPPING['C3']
                 ax2.imshow(segmented_image.astype(int))
+                ax2.set_aspect(1)
+                ax2.axis('off')
                 ax2.set_title("Target label")
-                fig.suptitle("Visualizer result")
+                black_patch = mpatches.Patch(color='black', label='BG')
+                red_patch = mpatches.Patch(color='red', label='NET')
+                green_patch = mpatches.Patch(color='green', label='ED')
+                blue_patch = mpatches.Patch(color='blue', label='ET')
+                ax2.legend(handles=[black_patch, red_patch, green_patch, blue_patch], bbox_to_anchor=(1.05, 1),
+                           loc='upper left',
+                           borderaxespad=0.)
+                plt.suptitle("Visualizer result", x=0.5, y=0.84)
+                plt.tight_layout()
                 LOGGER.info("Saving image number: %s", data["id"][0] + '_' + str(count))
-                fig.savefig(
+                plt.savefig(
                     image_output_path
                     + data["id"][0] + '_' + str(count)
                     + ".jpg"

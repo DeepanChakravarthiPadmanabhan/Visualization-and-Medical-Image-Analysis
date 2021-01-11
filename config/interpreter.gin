@@ -46,8 +46,6 @@ get_train_valid_test_loader.valid_dataset = %VALID_DATASET
 get_train_valid_test_loader.test_dataset = %TEST_DATASET
 DATA_LOADERS = @get_train_valid_test_loader()
 
-
-
 # Guided Backpropagation
 guided_backpropagate.dataloader = %DATA_LOADERS
 guided_backpropagate.net = @Unet_pruned()
