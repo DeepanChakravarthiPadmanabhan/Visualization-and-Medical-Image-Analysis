@@ -6,8 +6,9 @@ from torch.nn import ReLU
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
-from visualizer.utils.constants import MODALITY
+from visualizer.utils.constants import MODALITY, FLAG_TO_STUDY, TARGET_CLASS_TO_STUDY
 from visualizer.utils.post_processing import sketch_gt_overlay, post_process_gradient, get_positive_negative_saliency
+from copy import deepcopy
 
 LOGGER = logging.getLogger(__name__)
 
@@ -38,20 +39,25 @@ class GuidedBackprop():
 
         name_of_layers = []
         for name, module in self.model.named_modules():
-            if isinstance(module, torch.nn.Conv2d):
+            if isinstance(module, torch.nn.Conv2d) or isinstance(module, torch.nn.ConvTranspose2d):
                 name_of_layers.append(module)
         return name_of_layers
 
     def hook_layers(self):
 
-        def hook_function(module, grad_in, grad_out):
+        def gradient_hook_function(module, grad_in, grad_out):
             # Grad-in is the gradient with respect to the image pixels in the shape (1, 4, h, w)
             # Grad-out is the gradient with respect to the 1st conv layer
             self.gradients = grad_in[0]
 
+        def logit_hook_function(module, grad_in, grad_out):
+            self.logit_output = grad_out
+
         conv_layers = self.get_all_conv_layers(self.model)
         first_layer = conv_layers[0]
-        first_layer.register_backward_hook(hook_function)
+        logit_layer = conv_layers[-1]
+        first_layer.register_backward_hook(gradient_hook_function)
+        logit_layer.register_forward_hook(logit_hook_function)
 
     def update_relus(self):
         """
@@ -90,15 +96,40 @@ class GuidedBackprop():
                 module.register_backward_hook(relu_backward_hook_function)
                 module.register_forward_hook(relu_forward_hook_function)
 
-
-    def generate_gradients(self, image, target_class=1):
+    def generate_gradients(self, image, target_class=1, flag_to_study=4):
         model_output = self.model(image)
         # Zero gradients
         self.model.zero_grad()
         # Formulate the target for backpropagation
-        one_hot_output = torch.zeros((1, 4, 240, 240)) # (bs, #classes, H, W)
-        one_hot_output[:, target_class, :, :] = 1 # Declare the class of interest to calculate the gradient to be 1.
-        model_output.backward(gradient=one_hot_output) # Propagate the gradient of a given class to the input
+        gradient_to_propagate = torch.zeros(self.logit_output.shape)
+
+        if flag_to_study == 1:
+            # Research question 1
+            LOGGER.info('Performing visualization study: %s', flag_to_study)
+            logit_for_targetclass = torch.zeros(self.logit_output.shape)
+            logit_for_targetclass[0, target_class, ::] = self.logit_output[0, target_class, ::]
+            gradient_to_propagate = logit_for_targetclass
+
+        elif flag_to_study == 2:
+            # Research question 2
+            LOGGER.info('Performing visualization study: %s', flag_to_study)
+            predictions = (model_output > 0.5).float()
+            logit_for_classified_targetclass = torch.zeros(self.logit_output.shape)
+            logit_for_classified_targetclass[0, target_class, ::] = predictions[0, target_class, ::]
+            gradient_to_propagate = logit_for_classified_targetclass
+
+        elif flag_to_study == 3:
+            # Research question 3
+            LOGGER.info('Performing visualization study: %s', flag_to_study)
+            pass
+
+        else:
+            raise NotImplementedError('Only 3 visualization options available')
+
+        if gradient_to_propagate.max() == torch.tensor(0):
+            gradient_to_propagate += 1e-10
+        # Propagate the logit information to the input
+        model_output.backward(gradient=gradient_to_propagate)
         # Convert PyTorch variable to numpy array
         # [0] to get rid of the first channel (1, 4, 224, 224)
         gradients_as_arr = self.gradients.data.numpy()[0]
@@ -113,6 +144,8 @@ def guided_backpropagate(model_path,
                          report_output_path,
                          image_output_path,
                          visualize,
+                         target_class_to_study = 1,
+                         flag_to_study=1,
                          idx=150,
                          grad_visualizer_modality=1,
                          show=False,
@@ -150,7 +183,7 @@ def guided_backpropagate(model_path,
 
             image.requires_grad_(True)
             image = image.unsqueeze(0)
-            grad = GBP.generate_gradients(image)
+            grad = GBP.generate_gradients(image, target_class=target_class_to_study, flag_to_study=flag_to_study)
             grad_for_visualization = grad[grad_visualizer_modality]
             processed_grad = post_process_gradient(grad_for_visualization)
 
@@ -175,16 +208,23 @@ def guided_backpropagate(model_path,
                 ax2.axis('off')
                 ax2.set_title('Gradient')
 
-                plt.suptitle('Gradients of input image', x=0.5, y=0.84)
+                plt.suptitle('Gradients: ' + FLAG_TO_STUDY[flag_to_study] + ', Class: ' + TARGET_CLASS_TO_STUDY[target_class_to_study], x=0.5, y=0.84)
                 plt.tight_layout()
                 plt.savefig(
                     image_output_path
-                    + data["id"][0] + '_mask_grad_' + str(count)
+                    + data["id"][0] + '_mask_grad_flag_' + FLAG_TO_STUDY[flag_to_study] + '_class_' + TARGET_CLASS_TO_STUDY[target_class_to_study] + '_count_'+ str(count)
                     + ".pdf", dpi=300
                 )
                 if show:
                     plt.show()
                 plt.close(fig)
+
+                sketch_gt_overlay(image[0][grad_visualizer_modality].detach().numpy(),
+                                  label,
+                                  image_output_path + data["id"][0] + '_input_mask_' + str(count) + '.pdf',
+                                  MODALITY[grad_visualizer_modality],
+                                  True,
+                                  show)
 
                 if visualize_saliency:
                     fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
@@ -217,9 +257,3 @@ def guided_backpropagate(model_path,
                         plt.show()
                     plt.close()
 
-                sketch_gt_overlay(image[0][grad_visualizer_modality].detach().numpy(),
-                               label,
-                               image_output_path + data["id"][0] + '_input_mask_'+ str(count) + '.pdf',
-                               MODALITY[grad_visualizer_modality],
-                               True,
-                               show)

@@ -51,3 +51,7 @@ guided_backpropagate.dataloader = %DATA_LOADERS
 guided_backpropagate.net = @Unet_pruned()
 guided_backpropagate.image_output_path = 'report/out_interpreter/'
 guided_backpropagate.visualize = True
+# Set the target class under study. Available options: 0, 1, 2, 3 => for BG1, C1, C2, C3
+guided_backpropagate.target_class_to_study = 1
+# Set the research question under study. Available options: 1,2,3
+guided_backpropagate.flag_to_study = 2
