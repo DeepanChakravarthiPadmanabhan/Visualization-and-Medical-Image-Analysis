@@ -4,7 +4,10 @@ import numpy as np
 from visualizer.utils.constants import COLOR_MAPPING
 from skimage import color
 
-def sketch_gt_overlay(img, label, save_path='', modality='FLAIR', save_flag=False, show=False):
+
+def sketch_gt_overlay(
+    img, label, save_path="", modality="FLAIR", save_flag=False, show=False
+):
 
     alpha = 0.6
     rows, cols = img.shape
@@ -12,10 +15,10 @@ def sketch_gt_overlay(img, label, save_path='', modality='FLAIR', save_flag=Fals
 
     # Construct a colour image to superimpose
     color_mask = np.zeros((rows, cols, 3))
-    color_mask[label == 0] = COLOR_MAPPING['background']  # Black block
-    color_mask[label == 1] = COLOR_MAPPING['C1']  # Red block
-    color_mask[label == 2] = COLOR_MAPPING['C2']  # Green block
-    color_mask[label == 3] = COLOR_MAPPING['C3']  # Blue block
+    color_mask[label == 0] = COLOR_MAPPING["background"]  # Black block
+    color_mask[label == 1] = COLOR_MAPPING["C1"]  # Red block
+    color_mask[label == 2] = COLOR_MAPPING["C2"]  # Green block
+    color_mask[label == 3] = COLOR_MAPPING["C3"]  # Blue block
 
     # Convert the input image and color mask to Hue Saturation Value (HSV) colorspace
     img_hsv = color.rgb2hsv(img_color)
@@ -28,19 +31,24 @@ def sketch_gt_overlay(img, label, save_path='', modality='FLAIR', save_flag=Fals
 
     if save_flag:
         # Display the output
-        fig, (ax1, ax2) = plt.subplots(1, 2, subplot_kw={'xticks': [], 'yticks': []})
+        fig, (ax1, ax2) = plt.subplots(1, 2, subplot_kw={"xticks": [], "yticks": []})
         ax1.set_aspect(1)
         ax1.imshow(img, cmap=plt.cm.gray)
-        ax1.set_title('Image ('+ modality + ')')
+        ax1.set_title("Image (" + modality + ")")
 
         ax2.set_aspect(1)
         ax2.imshow(img_masked)
         ax2.set_title("Groundtruth mask")
-        black_patch = mpatches.Patch(color='black', label='BG')
-        red_patch = mpatches.Patch(color='red', label='NET')
-        green_patch = mpatches.Patch(color='green', label='ED')
-        blue_patch = mpatches.Patch(color='blue', label='ET')
-        ax2.legend(handles=[black_patch, red_patch, green_patch, blue_patch], bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
+        black_patch = mpatches.Patch(color="black", label="BG")
+        red_patch = mpatches.Patch(color="red", label="NET")
+        green_patch = mpatches.Patch(color="green", label="ED")
+        blue_patch = mpatches.Patch(color="blue", label="ET")
+        ax2.legend(
+            handles=[black_patch, red_patch, green_patch, blue_patch],
+            bbox_to_anchor=(1.05, 1),
+            loc="upper left",
+            borderaxespad=0.0,
+        )
 
         plt.tight_layout()
         plt.savefig(save_path, dpi=300)
@@ -50,6 +58,7 @@ def sketch_gt_overlay(img, label, save_path='', modality='FLAIR', save_flag=Fals
 
     else:
         return img_masked
+
 
 def post_process_gradient(gradient):
     """
@@ -62,6 +71,7 @@ def post_process_gradient(gradient):
     gradient = gradient - gradient.min()
     gradient /= gradient.max()
     return gradient
+
 
 def get_positive_negative_saliency(gradient):
     """

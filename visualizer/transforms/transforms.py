@@ -70,8 +70,8 @@ class NormalizeImage(object):
     def normalize(self, image: np.ndarray) -> np.ndarray:
         # normalize data
         for i in range(image.shape[2]):
-            if  image[:,:,i].max() > 0:
-                image[:,:,i] = (image[:,:,i] / image[:,:,i].max())
+            if image[:, :, i].max() > 0:
+                image[:, :, i] = image[:, :, i] / image[:, :, i].max()
         return image
 
     def __call__(self, sample: typing.Dict) -> typing.Dict:
@@ -89,7 +89,7 @@ class NormalizeImage(object):
 class ToTensor(object):
     def convert_to_tensor(self, image: np.ndarray) -> torch.Tensor:
         image = torch.from_numpy(image).float()
-        image = image.permute(2, 0, 1) # Channels/ Modalities to the first dimension
+        image = image.permute(2, 0, 1)  # Channels/ Modalities to the first dimension
         return image
 
     def __call__(self, sample: typing.Dict) -> typing.Dict:
@@ -112,10 +112,14 @@ class ToTensor(object):
                 sample["label"] = label
             else:
                 # TODO: Check whether this label renaming is necessary
-                sample["label"][np.where(sample["label"]==4)] = 3
+                sample["label"][np.where(sample["label"] == 4)] = 3
                 label = torch.from_numpy(sample["label"]).float()
-                one_hot_tensor = torch.nn.functional.one_hot(label.long(), num_classes=4)
-                sample["label"] = one_hot_tensor.permute(2, 0, 1).to(dtype=torch.float32)
+                one_hot_tensor = torch.nn.functional.one_hot(
+                    label.long(), num_classes=4
+                )
+                sample["label"] = one_hot_tensor.permute(2, 0, 1).to(
+                    dtype=torch.float32
+                )
 
         return sample
 

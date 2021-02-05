@@ -92,10 +92,9 @@ class ValidDataset(Dataset):
 
         image = np.array([flair, t1, t1ce, t2])
         label = seg
-        image = image.transpose(1, 2, 0) # Channels/ Modalities to the last dimension
+        image = image.transpose(1, 2, 0)  # Channels/ Modalities to the last dimension
 
         return image, label
-
 
     def __len__(self):
         return len(self.image_dir_list)

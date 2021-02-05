@@ -77,7 +77,8 @@ def evaluate_model_old(
     train_loader, valid_loader, test_loader = data_loaders
 
     LOGGER.info(
-        "Evaluating Visualizer on BraTS 2019 images for brain tumor segmentation using the model, %s", model_path
+        "Evaluating Visualizer on BraTS 2019 images for brain tumor segmentation using the model, %s",
+        model_path,
     )
     LOGGER.info("Results will be written to the path, %s", report_output_path)
 
@@ -86,7 +87,7 @@ def evaluate_model_old(
     # df_columns = ["loss", "precision", "recall", "f1-score"]
     # df_micro = pd.DataFrame(columns=df_columns)
     # df_macro = pd.DataFrame(columns=df_columns)
-    df_dice = pd.DataFrame(columns=['loss', 'dice'])
+    df_dice = pd.DataFrame(columns=["loss", "dice"])
     # confusion_matrix_array = np.zeros((num_classes, num_classes))
     # precision_per_class = np.zeros((num_classes))
     # recall_per_class = np.zeros((num_classes))
@@ -108,9 +109,18 @@ def evaluate_model_old(
 
         dice_value = get_dice_coefficient(outputs_segmentation, labels_segmentation)
         dice_value_mean = dice_value.mean()
-        LOGGER.info("Dice co-efficient for image %s: %s", str(len(df_dice) + 1), dice_value_mean.detach().numpy())
-        LOGGER.info("Dice loss for image %s: %s", str(len(df_dice) + 1), loss.detach().numpy())
-        df_dice.loc[len(df_dice)] = [loss.detach().numpy(), dice_value_mean.detach().numpy()]
+        LOGGER.info(
+            "Dice co-efficient for image %s: %s",
+            str(len(df_dice) + 1),
+            dice_value_mean.detach().numpy(),
+        )
+        LOGGER.info(
+            "Dice loss for image %s: %s", str(len(df_dice) + 1), loss.detach().numpy()
+        )
+        df_dice.loc[len(df_dice)] = [
+            loss.detach().numpy(),
+            dice_value_mean.detach().numpy(),
+        ]
 
         if visualize and len(df_dice) % 10 == 0:
             fig, (ax1, ax2) = plt.subplots(1, 2)
@@ -121,10 +131,7 @@ def evaluate_model_old(
             fig.suptitle("Visualizer result")
             LOGGER.info("Saving image number: %s", str(len(df_dice) + 1))
             fig.savefig(
-                image_output_path
-                + "/output_images/"
-                + str(len(df_dice) + 1)
-                + ".jpg"
+                image_output_path + "/output_images/" + str(len(df_dice) + 1) + ".jpg"
             )
             plt.close(fig)
 
@@ -235,16 +242,20 @@ def calculate_metrics(
     else:
         start_label = 1
     metrics = precision_recall_fscore_support(
-        target[0], output[0], labels=list(range(start_label, num_classes)), average=average
+        target[0],
+        output[0],
+        labels=list(range(start_label, num_classes)),
+        average=average,
     )
 
     return metrics[0], metrics[1], metrics[2]
 
 
-def get_confusion_matrix(target: np.ndarray,
-                         output: np.ndarray,
-                         num_classes: int = 4,
-                         ) -> np.ndarray:
+def get_confusion_matrix(
+    target: np.ndarray,
+    output: np.ndarray,
+    num_classes: int = 4,
+) -> np.ndarray:
     """
     Calculates the confusion matrix normalized for each image with regard to all the classes
     method passed using sklearn.metrics.confusion_matrix.

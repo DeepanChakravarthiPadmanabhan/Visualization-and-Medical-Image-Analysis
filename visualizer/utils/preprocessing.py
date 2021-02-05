@@ -99,5 +99,4 @@ def calculate_weight(
         df_count_metrics.to_excel(excel_writer, sheet_name="frequency-weight")
         excel_writer.save()
 
-
     return segmentation_class_weights

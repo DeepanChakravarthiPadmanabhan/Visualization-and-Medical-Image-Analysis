@@ -140,8 +140,7 @@ class Trainer:
                 else:
                     loss2 = torch.tensor(0)
 
-                LOGGER.info('Dice Loss: %s, CE'
-                            ' Loss: %s', loss1, loss2)
+                LOGGER.info("Dice Loss: %s, CE" " Loss: %s", loss1, loss2)
                 loss = loss1 + loss2
                 loss.backward()
 
@@ -214,10 +213,11 @@ class Trainer:
 
         self.tensorboard_writer.close()
 
-    def write_validation_images(self,
-                                outputs_segmentation: torch.Tensor,
-                                target: torch.Tensor,
-                                ) -> typing.List:
+    def write_validation_images(
+        self,
+        outputs_segmentation: torch.Tensor,
+        target: torch.Tensor,
+    ) -> typing.List:
         """
         Method to generate a list of figure for visualizing in the tensorboard.
 

@@ -102,7 +102,6 @@ def get_train_valid_test_loader(
         DataLoader for each sets of data.
     """
 
-
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=batch_size,
@@ -131,6 +130,10 @@ def get_train_valid_test_loader(
     )
     LOGGER.info(
         "Loading datasets: %d training images, %d validation images, %d test patient cases with batch size %d",
-        len(train_loader.dataset), len(valid_loader.dataset), len(test_loader.dataset), batch_size)
+        len(train_loader.dataset),
+        len(valid_loader.dataset),
+        len(test_loader.dataset),
+        batch_size,
+    )
 
     return train_loader, valid_loader, test_loader
