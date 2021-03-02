@@ -15,8 +15,9 @@ from visualizer.utils.post_processing import (
 from copy import deepcopy
 import cv2
 
-LOGGER = logging.getLogger(__name__)
+import torch.nn as nn
 
+LOGGER = logging.getLogger(__name__)
 
 class GuidedBackprop:
     def __init__(self, model):
@@ -55,8 +56,8 @@ class GuidedBackprop:
             # Grad-out is the gradient with respect to the 1st conv layer
             self.gradients = grad_in[0]
 
-        def logit_hook_function(module, grad_in, grad_out):
-            self.logit_output = grad_out
+        def logit_hook_function(module, input, output):
+            self.logit_output = output.detach()
 
         conv_layers = self.get_all_conv_layers(self.model)
         first_layer = conv_layers[0]
@@ -103,56 +104,68 @@ class GuidedBackprop:
                 module.register_backward_hook(relu_backward_hook_function)
                 module.register_forward_hook(relu_forward_hook_function)
 
-    def generate_gradients(self, image, target_class=1, flag_to_study=4):
-        model_output = self.model(image)
-        # Zero gradients
+    def generate_gradients(self, image, predictions, target_class=1, flag_to_study=4):
         self.model.zero_grad()
-        # Formulate the target for backpropagation
-        gradient_to_propagate = torch.zeros(self.logit_output.shape)
-        predictions = (model_output > 0.5).float()
+        out = self.model(image)
+        self.target_class = target_class
+        self.flag_to_study = flag_to_study
 
         if flag_to_study == 1:
-            # Research question 1
-            LOGGER.info("Performing visualization study: %s", flag_to_study)
-            logit_for_targetclass = torch.zeros(self.logit_output.shape)
-            logit_for_targetclass[0, target_class, ::] = self.logit_output[
-                0, target_class, ::
-            ]
-            gradient_to_propagate = logit_for_targetclass
+            LOGGER.info("Performing visualization study %s on class %s", flag_to_study, target_class)
+            loss_final_channels = torch.zeros(self.logit_output.shape)
+            loss_final_channels[0, target_class, ::] = self.logit_output[
+                                                         0, target_class, ::
+                                                         ]
+            loss_final_channels_avg = torch.mean(
+                loss_final_channels.view(loss_final_channels.size(0), loss_final_channels.size(1), -1), dim=2)
+            loss_final = torch.FloatTensor(loss_final_channels_avg[0])
+            print('Average logit: ', loss_final)
+            loss_final.unsqueeze_(0)
+            loss_final.unsqueeze_(2)
+            loss_final.unsqueeze_(2)
 
-        elif flag_to_study == 2:
-            # Research question 2
-            LOGGER.info("Performing visualization study: %s", flag_to_study)
-            logit_for_classified_targetclass = torch.zeros(self.logit_output.shape)
-            mask = predictions[0, target_class]
+        elif flag_to_study==2:
+            LOGGER.info("Performing visualization study %s on class %s", flag_to_study, target_class)
+            loss_final_channels = torch.zeros(self.logit_output.shape)
+            loss_final = torch.FloatTensor([0, 0, 0, 0])
+            mask = predictions[0, target_class, ::]
             idxs = torch.where(mask == 1)
             if len(idxs[0]) != 0:
-                logit_for_classified_targetclass[
+                loss_final_channels[
                     0, target_class, idxs[0], idxs[1]
                 ] = self.logit_output[0, target_class, idxs[0], idxs[1]]
-            gradient_to_propagate = logit_for_classified_targetclass
+
+                loss_final_channels_avg = torch.sum(loss_final_channels.view(loss_final_channels.size(0), loss_final_channels.size(1), -1), dim=2)
+                loss_final_channels_avg = loss_final_channels_avg / len(idxs[0])
+                loss_final = torch.FloatTensor(loss_final_channels_avg[0])
+
+            print('Average logit: ', loss_final)
+            loss_final.unsqueeze_(0)
+            loss_final.unsqueeze_(2)
+            loss_final.unsqueeze_(2)
+
 
         elif flag_to_study == 3:
             # Research question 3
-            LOGGER.info("Performing visualization study: %s", flag_to_study)
-            image = self.logit_output[0, target_class, ::]
-            image = image.detach().numpy()
+            LOGGER.info("Performing visualization study %s on class %s", flag_to_study, target_class)
+            logit_image = self.logit_output[0, target_class, ::]
+            logit_image = logit_image.detach().numpy()
 
             # Select ROI
-            coordinates = cv2.selectROI("Image", image)
+            coordinates = cv2.selectROI("Image", logit_image)
             LOGGER.info("User selected region (x, y, w, h): %s", coordinates)
 
             # Crop image
             # coordinates -> ( x, y, w, h )
             # crop image -> (y: y + h, x: x + w)
-            # crop_image = image[int(coordinates[1]):int(coordinates[1] + coordinates[3]),
+            # crop_image = logit_image[int(coordinates[1]):int(coordinates[1] + coordinates[3]),
             #              int(coordinates[0]):int(coordinates[0] + coordinates[2])]
             # Display cropped image
             # cv2.imshow("Image", crop_image)
             # cv2.waitKey(0)
 
-            logit_for_targetclass = torch.zeros(self.logit_output.shape)
-            logit_for_targetclass[
+            loss_final_channels = torch.zeros(self.logit_output.shape)
+            loss_final_channels[
                 0,
                 target_class,
                 int(coordinates[1]) : int(coordinates[1] + coordinates[3]),
@@ -163,20 +176,20 @@ class GuidedBackprop:
                 int(coordinates[1]) : int(coordinates[1] + coordinates[3]),
                 int(coordinates[0]) : int(coordinates[0] + coordinates[2]),
             ]
-            gradient_to_propagate = logit_for_targetclass
+            loss_final_channels_avg = torch.mean(
+                loss_final_channels.view(loss_final_channels.size(0), loss_final_channels.size(1), -1), dim=2)
+            loss_final = torch.FloatTensor(loss_final_channels_avg[0])
+            print('Average logit: ', loss_final)
+            loss_final.unsqueeze_(0)
+            loss_final.unsqueeze_(2)
+            loss_final.unsqueeze_(2)
 
         else:
             raise NotImplementedError("Only 3 visualization options available")
 
-        if gradient_to_propagate.max() == torch.tensor(0):
-            gradient_to_propagate += 1e-10
-        # Propagate the logit information to the input
-        model_output.backward(gradient=gradient_to_propagate)
-        # Convert PyTorch variable to numpy array
-        # [0] to get rid of the first channel (1, 4, 224, 224)
+        out.backward(loss_final)
         gradients_as_arr = self.gradients.data.numpy()[0]
-
-        return gradients_as_arr, predictions
+        return gradients_as_arr
 
 
 @gin.configurable
@@ -212,54 +225,98 @@ def guided_backpropagate(
     test_loader = dataloader[2]
     device = torch.device("cpu")
 
-    state_test = torch.load(model_path, map_location=device)
-    net.load_state_dict(state_test)
-    GBP = GuidedBackprop(net)
-
     for data in test_loader:
         count = 0
+        state_test = torch.load(model_path, map_location=device)
+        net.load_state_dict(state_test)
+
         for image, label in zip(data["image"][idx], data["label"][idx]):
             count += 1
-            LOGGER.info("Predicting on patient id: %s", data["id"][0])
 
-            image.requires_grad_(True)
-            image = image.unsqueeze(0)
-            grad, predictions = GBP.generate_gradients(
-                image, target_class=target_class_to_study, flag_to_study=flag_to_study
+            image_grad = deepcopy(image)
+            new_net = deepcopy(net)
+            new_net.mask_layer._modules['7'] = nn.AvgPool2d(240)
+
+            image.unsqueeze_(0)
+            model_output = net(image)
+            predictions_raw = (model_output > 0.5).float()
+            mask_0 = torch.where(predictions_raw[0, 0] == 1)
+            mask_1 = torch.where(predictions_raw[0, 1] == 1)
+            mask_2 = torch.where(predictions_raw[0, 2] == 1)
+            mask_3 = torch.where(predictions_raw[0, 3] == 1)
+            print('Label counts for prediction in GBP: ', len(mask_0[0]), len(mask_1[0]), len(mask_2[0]), len(mask_3[0]))
+            predictions = torch.argmax(predictions_raw[0], dim=0)
+            print('Label counts in final prediction labels: ', torch.unique(predictions, return_counts=True))
+
+            GBP = GuidedBackprop(new_net)
+
+            image_grad.requires_grad_(True)
+            image_grad = image_grad.unsqueeze(0)
+            grad = GBP.generate_gradients(
+                image_grad, predictions=predictions_raw, target_class=target_class_to_study, flag_to_study=flag_to_study
             )
-            grad_for_visualization = grad[grad_visualizer_modality]
-            processed_grad = post_process_gradient(grad_for_visualization)
+
+            processed_grad = []
+            for i in range(4):
+                processed_grad.append(post_process_gradient(grad[i]))
 
             if visualize:
 
-                fig, (ax1, ax2) = plt.subplots(1, 2)
+                fig, ax = plt.subplots(2, 3)
 
                 img_masked = sketch_gt_overlay(
                     image[0][grad_visualizer_modality].detach().numpy(),
                     label,
                     MODALITY[grad_visualizer_modality],
                 )
-                ax1.set_aspect(1)
-                ax1.imshow(img_masked)
-                ax1.axis("off")
-                ax1.set_title(
+
+                predicted_mask = sketch_gt_overlay(
+                    image[0][grad_visualizer_modality].detach().numpy(),
+                    predictions.detach().numpy(),
+                    MODALITY[grad_visualizer_modality],
+                )
+
+                ax[0,0].set_aspect(1)
+                ax[0,0].imshow(processed_grad[0], cmap='gray')
+                ax[0,0].axis("off")
+                ax[0,0].set_title("FLAIR")
+
+                ax[0,1].set_aspect(1)
+                ax[0,1].imshow(processed_grad[1], cmap='gray')
+                ax[0,1].axis("off")
+                ax[0,1].set_title("T1")
+
+                ax[1,0].set_aspect(1)
+                ax[1,0].imshow(processed_grad[2], cmap='gray')
+                ax[1,0].axis("off")
+                ax[1,0].set_title("T1-CE")
+
+                ax[1,1].set_aspect(1)
+                ax[1,1].imshow(processed_grad[3], cmap='gray')
+                ax[1,1].axis("off")
+                ax[1,1].set_title("T2")
+
+                ax[0, 2].set_aspect(1)
+                ax[0, 2].imshow(img_masked)
+                ax[0, 2].axis("off")
+                ax[0, 2].set_title(
                     "Image (" + MODALITY[grad_visualizer_modality] + ") + Mask"
                 )
                 black_patch = mpatches.Patch(color="black", label="BG")
                 red_patch = mpatches.Patch(color="red", label="NET")
                 green_patch = mpatches.Patch(color="green", label="ED")
                 blue_patch = mpatches.Patch(color="blue", label="ET")
-                ax1.legend(
+                ax[0, 2].legend(
                     handles=[black_patch, red_patch, green_patch, blue_patch],
                     bbox_to_anchor=(1.05, 1),
                     loc="upper left",
                     borderaxespad=0.0,
                 )
 
-                ax2.set_aspect(1)
-                ax2.imshow(processed_grad)
-                ax2.axis("off")
-                ax2.set_title("Gradient")
+                ax[1, 2].set_aspect(1)
+                ax[1, 2].imshow(predicted_mask)
+                ax[1, 2].axis("off")
+                ax[1, 2].set_title("Predicted mask")
 
                 plt.suptitle(
                     "Gradients: "
@@ -267,7 +324,7 @@ def guided_backpropagate(
                     + ", Class: "
                     + TARGET_CLASS_TO_STUDY[target_class_to_study],
                     x=0.5,
-                    y=0.84,
+                    y=0.95,
                 )
                 plt.tight_layout()
                 plt.savefig(
@@ -286,48 +343,81 @@ def guided_backpropagate(
                     plt.show()
                 plt.close(fig)
 
-                fig, (ax1, ax2) = plt.subplots(1, 2)
+            if visualize_saliency:
 
-                ax1.set_aspect(1)
-                ax1.imshow(img_masked)
-                ax1.axis("off")
-                ax1.set_title(
+                pos_grad = []
+                neg_grad = []
+                for i in range(4):
+                    pos_saliency, neg_saliency = get_positive_negative_saliency(
+                        grad[i]
+                    )
+                    pos_grad.append(pos_saliency)
+                    neg_grad.append(neg_saliency)
+
+                fig, ax = plt.subplots(2, 3)
+                img_masked = sketch_gt_overlay(
+                    image[0][grad_visualizer_modality].detach().numpy(),
+                    label,
+                    MODALITY[grad_visualizer_modality],
+                )
+
+                predicted_mask = sketch_gt_overlay(
+                    image[0][grad_visualizer_modality].detach().numpy(),
+                    predictions.detach().numpy(),
+                    MODALITY[grad_visualizer_modality],
+                )
+
+                ax[0, 0].set_aspect(1)
+                ax[0, 0].imshow(pos_grad[0], cmap='gray')
+                ax[0, 0].axis("off")
+                ax[0, 0].set_title("FLAIR")
+
+                ax[0, 1].set_aspect(1)
+                ax[0, 1].imshow(pos_grad[1], cmap='gray')
+                ax[0, 1].axis("off")
+                ax[0, 1].set_title("T1")
+
+                ax[1, 0].set_aspect(1)
+                ax[1, 0].imshow(pos_grad[2], cmap='gray')
+                ax[1, 0].axis("off")
+                ax[1, 0].set_title("T1-CE")
+
+                ax[1, 1].set_aspect(1)
+                ax[1, 1].imshow(pos_grad[3], cmap='gray')
+                ax[1, 1].axis("off")
+                ax[1, 1].set_title("T2")
+
+                ax[0, 2].set_aspect(1)
+                ax[0, 2].imshow(img_masked)
+                ax[0, 2].axis("off")
+                ax[0, 2].set_title(
                     "Image (" + MODALITY[grad_visualizer_modality] + ") + Mask"
                 )
                 black_patch = mpatches.Patch(color="black", label="BG")
                 red_patch = mpatches.Patch(color="red", label="NET")
                 green_patch = mpatches.Patch(color="green", label="ED")
                 blue_patch = mpatches.Patch(color="blue", label="ET")
-                ax1.legend(
+                ax[0, 2].legend(
                     handles=[black_patch, red_patch, green_patch, blue_patch],
                     bbox_to_anchor=(1.05, 1),
                     loc="upper left",
                     borderaxespad=0.0,
                 )
 
-                ax2.set_aspect(1)
-                predicted_mask = sketch_gt_overlay(
-                    image[0][grad_visualizer_modality].detach().numpy(),
-                    predictions[0][grad_visualizer_modality].detach().numpy(),
-                    MODALITY[grad_visualizer_modality],
-                )
-                ax2.imshow(predicted_mask)
-                ax2.axis("off")
-                ax2.set_title("Predicted mask")
+                ax[1, 2].set_aspect(1)
+                ax[1, 2].imshow(predicted_mask)
+                ax[1, 2].axis("off")
+                ax[1, 2].set_title("Predicted mask")
 
-                plt.suptitle(
-                    "Prediction: "
+                plt.suptitle("Positive Gradients: "
                     + FLAG_TO_STUDY[flag_to_study]
                     + ", Class: "
-                    + TARGET_CLASS_TO_STUDY[target_class_to_study],
-                    x=0.5,
-                    y=0.84,
-                )
+                    + TARGET_CLASS_TO_STUDY[target_class_to_study], x=0.5, y=0.95)
                 plt.tight_layout()
                 plt.savefig(
                     image_output_path
                     + data["id"][0]
-                    + "_predicted_flag_"
+                    + "_positive_grad_flag_"
                     + FLAG_TO_STUDY[flag_to_study]
                     + "_class_"
                     + TARGET_CLASS_TO_STUDY[target_class_to_study]
@@ -338,53 +428,81 @@ def guided_backpropagate(
                 )
                 if show:
                     plt.show()
-                plt.close(fig)
+                plt.close()
 
-                sketch_gt_overlay(
+
+                fig, ax = plt.subplots(2, 3)
+                img_masked = sketch_gt_overlay(
                     image[0][grad_visualizer_modality].detach().numpy(),
                     label,
-                    image_output_path
-                    + data["id"][0]
-                    + "_input_mask_"
-                    + str(count)
-                    + ".pdf",
                     MODALITY[grad_visualizer_modality],
-                    True,
-                    show,
                 )
 
-                if visualize_saliency:
-                    fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
+                predicted_mask = sketch_gt_overlay(
+                    image[0][grad_visualizer_modality].detach().numpy(),
+                    predictions.detach().numpy(),
+                    MODALITY[grad_visualizer_modality],
+                )
 
-                    pos_saliency, neg_saliency = get_positive_negative_saliency(
-                        grad_for_visualization
-                    )
+                ax[0, 0].set_aspect(1)
+                ax[0, 0].imshow(neg_grad[0], cmap='gray')
+                ax[0, 0].axis("off")
+                ax[0, 0].set_title("FLAIR")
 
-                    ax1.set_aspect(1)
-                    ax1.imshow(processed_grad)
-                    ax1.axis("off")
-                    ax1.set_title("Gradients - out/inp")
+                ax[0, 1].set_aspect(1)
+                ax[0, 1].imshow(neg_grad[1], cmap='gray')
+                ax[0, 1].axis("off")
+                ax[0, 1].set_title("T1")
 
-                    ax2.set_aspect(1)
-                    ax2.imshow(pos_saliency)  # Positive probability impact
-                    ax2.axis("off")
-                    ax2.set_title("Positive")
+                ax[1, 0].set_aspect(1)
+                ax[1, 0].imshow(neg_grad[2], cmap='gray')
+                ax[1, 0].axis("off")
+                ax[1, 0].set_title("T1-CE")
 
-                    ax3.set_aspect(1)
-                    ax3.imshow(neg_saliency)  # Negative probability impact
-                    ax3.axis("off")
-                    ax3.set_title("Negative")
+                ax[1, 1].set_aspect(1)
+                ax[1, 1].imshow(neg_grad[3], cmap='gray')
+                ax[1, 1].axis("off")
+                ax[1, 1].set_title("T2")
 
-                    plt.suptitle("Positive and negative saliency maps", x=0.5, y=0.8)
-                    plt.tight_layout()
-                    plt.savefig(
-                        image_output_path
-                        + data["id"][0]
-                        + "_all_grad_"
-                        + str(count)
-                        + ".pdf",
-                        dpi=300,
-                    )
-                    if show:
-                        plt.show()
-                    plt.close()
+                ax[0, 2].set_aspect(1)
+                ax[0, 2].imshow(img_masked)
+                ax[0, 2].axis("off")
+                ax[0, 2].set_title(
+                    "Image (" + MODALITY[grad_visualizer_modality] + ") + Mask"
+                )
+                black_patch = mpatches.Patch(color="black", label="BG")
+                red_patch = mpatches.Patch(color="red", label="NET")
+                green_patch = mpatches.Patch(color="green", label="ED")
+                blue_patch = mpatches.Patch(color="blue", label="ET")
+                ax[0, 2].legend(
+                    handles=[black_patch, red_patch, green_patch, blue_patch],
+                    bbox_to_anchor=(1.05, 1),
+                    loc="upper left",
+                    borderaxespad=0.0,
+                )
+
+                ax[1, 2].set_aspect(1)
+                ax[1, 2].imshow(predicted_mask)
+                ax[1, 2].axis("off")
+                ax[1, 2].set_title("Predicted mask")
+
+                plt.suptitle("Negative Gradients: "
+                    + FLAG_TO_STUDY[flag_to_study]
+                    + ", Class: "
+                    + TARGET_CLASS_TO_STUDY[target_class_to_study], x=0.5, y=0.95)
+                plt.tight_layout()
+                plt.savefig(
+                    image_output_path
+                    + data["id"][0]
+                    + "_negative_grad_flag_"
+                    + FLAG_TO_STUDY[flag_to_study]
+                    + "_class_"
+                    + TARGET_CLASS_TO_STUDY[target_class_to_study]
+                    + "_count_"
+                    + str(count)
+                    + ".pdf",
+                    dpi=300,
+                )
+                if show:
+                    plt.show()
+                plt.close()

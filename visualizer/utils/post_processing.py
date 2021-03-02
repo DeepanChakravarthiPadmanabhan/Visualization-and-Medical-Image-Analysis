@@ -64,7 +64,7 @@ def post_process_gradient(gradient):
     """
     Exports the original gradient image
     :param gradient:
-        Numpy array of the gradient with shape (3, 224, 224)
+        Numpy array of the gradient with shape (4, 240, 240)
     :param filename:
     :return:
     """
