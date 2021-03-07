@@ -24,8 +24,8 @@ References:
 
 [3] S. Bakas, M. Reyes, A. Jakab, S. Bauer, M. Rempfler, A. Crimi, et al., "Identifying the Best Machine Learning Algorithms for Brain Tumor Segmentation, Progression Assessment, and Overall Survival Prediction in the BRATS Challenge", arXiv preprint arXiv:1811.02629 (2018).
 
-[4] https://glassboxmedicine.com/2019/09/15/best-use-of-train-val-test-splits-with-tips-for-medical-data/
+[4] Rachel Lea Ballantyne Draelos, Best Use of Train/Val/Test Splits with Tips for Medical Data, Glass Box, Available at: https://glassboxmedicine.com/2019/09/15/best-use-of-train-val-test-splits-with-tips-for-medical-data/, Accessed on: 19. 12. 2020.
 
-[5] https://captum.ai/tutorials/Segmentation_Interpret
+[5] Captum, 'Semantic Segmentation with Captum', Captum Tutorials, Available at: https://captum.ai/tutorials/Segmentation_Interpret, Accessed on: 19. 12. 2020.
 
 \* - Under development phase

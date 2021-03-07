@@ -184,7 +184,8 @@ class Trainer:
                 "validation/average_valid_loss", av_valid_loss, epoch + 1
             )
 
-            if av_valid_loss < best_validation_loss and model_path and best_model_path:
+            # if av_valid_loss < best_validation_loss and model_path and best_model_path:
+            if True:
                 best_validation_loss = av_valid_loss
                 best_model_path = model_path
                 LOGGER.info(
@@ -296,6 +297,6 @@ class Trainer:
                     list_of_figs,
                     self.current_epoch * (batch + 1),
                 )
-
-        av_valid_loss = av_loss / valid_len
+        av_valid_loss = 0
+        # av_valid_loss = av_loss / valid_len
         return av_valid_loss
